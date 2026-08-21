@@ -13,17 +13,27 @@ Availability](https://www.faa.gov/air_traffic/flight_info/aeronav/acf/media/RDs/
 
 ## Documentation
 
-[IAP_Georeferencing.pdf](doc/IAP_Georeferencing.pdf) ([download
-link](https://raw.githubusercontent.com/markmentovai/faa_tpp_iap_georef/main/doc/IAP_Georeferencing.pdf))
-contains slides from a 2026-08-20 meeting, during which this work was presented.
+Documentation is in the [doc](doc/) directory.
+
+ - [IAP_Georeferencing.pdf](doc/IAP_Georeferencing.pdf) ([download
+   link](https://raw.githubusercontent.com/markmentovai/faa_tpp_iap_georef/main/doc/IAP_Georeferencing.pdf))
+   contains slides from a 2026-08-20 meeting, during which this work was
+   presented.
+ - [IAP_Georeferencing_PDF_Boxes.pdf](doc/IAP_Georeferencing_PDF_Boxes.pdf)
+   ([download
+   link](https://raw.githubusercontent.com/markmentovai/faa_tpp_iap_georef/main/doc/IAP_Georeferencing_PDF_Boxes.pdf))
+   contains follow-up slides distributed on 2026-08-21. These slides demonstrate
+   concepts relevant to questions about the selection of LPTS points in IAP
+   chart PDFs, and how they relate to the enclosing viewport BBox and page
+   dimensions (MediaBox and CropBox).
 
 Documentation, including the presentation slides and this README.md, is licensed
 under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Source Code
 
-Source code for the example programs in that presentation is in the [src](src/)
-directory.
+Source code for the example programs in IAP_Georeferencing.pdf is in the
+[src](src/) directory.
 
 ### Executable Programs
 
