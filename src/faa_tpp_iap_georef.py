@@ -377,16 +377,25 @@ def main(args: typing.Sequence[str]) -> int | None:
     parser.add_argument('--strategy',
                         choices=_STRATEGIES,
                         default=_STRATEGIES[0])
+    parser.add_argument('--diy-pdf-module',
+                        choices=faa_tpp_iap_georef_diy.PDF_MODULES,
+                        default=faa_tpp_iap_georef_diy.PDF_MODULES[0])
     parser.add_argument('--format', choices=('xml', 'csv'), default='xml')
     parser.add_argument('--precision', type=int, default=7)
     parser.add_argument('tpp_dir')
     parser.add_argument('out_path', nargs='?')
     parsed = parser.parse_args(args)
 
-    georef_chart_f = {
-        'rasterio': faa_tpp_iap_georef_chart_rasterio,
-        'diy': faa_tpp_iap_georef_diy.faa_tpp_iap_georef_chart_diy,
-    }[parsed.strategy]
+    if parsed.strategy == 'rasterio':
+        georef_chart_f = faa_tpp_iap_georef_chart_rasterio
+    else:
+        assert parsed.strategy == 'diy'
+        georef_chart_f = {
+            'pikepdf':
+                faa_tpp_iap_georef_diy.faa_tpp_iap_georef_chart_diy_pikepdf,
+            'pypdf':
+                faa_tpp_iap_georef_diy.faa_tpp_iap_georef_chart_diy_pypdf
+        }[parsed.diy_pdf_module]
 
     output_cls = {
         'xml': _FaaTppIapGeorefXmlOutput,

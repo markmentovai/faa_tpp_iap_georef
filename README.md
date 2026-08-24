@@ -43,7 +43,11 @@ Source code for the example programs in IAP_Georeferencing.pdf is in the
    parallel operation for increased performance (`--parallel`, on by default),
    and can use the `faa_tpp_iap_georef_diy` module (`--strategy=diy`) which
    performs all geotransforms without external code dependencies, eliminating
-   the reliance on `rasterio` and GDAL.
+   the reliance on [rasterio](https://rasterio.readthedocs.io/) and
+   [GDAL](https://gdal.org/). In DIY mode, either
+   [pikepdf](https://pikepdf.readthedocs.io/en/latest/) or
+   [pypdf](https://pypdf.readthedocs.io/) can be used for PDF access
+   (`--diy-pdf-module`).
  - [`faa_tpp_iap_georef_csv`](src/faa_tpp_iap_georef_csv.py), was featured
    during the presentation. It’s a scaled-back version of `faa_tpp_iap_georef`,
    and is limited to CSV output.
