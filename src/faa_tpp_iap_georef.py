@@ -43,7 +43,7 @@ else:
         _STRATEGIES = ('diy',)
 
 import faa_tpp_iap_georef_diy
-from faa_tpp_iap_georef_types import ChartGeorefInfo, LatLon
+import faa_tpp_iap_georef_types
 
 _T = typing.TypeVar("_T")
 _P = typing.ParamSpec("_P")
@@ -75,7 +75,8 @@ class _ImmediateExecutor(concurrent.futures.Executor):
 
 
 def faa_tpp_iap_georef_chart_rasterio(
-        pdf_path: os.PathLike[str] | str) -> ChartGeorefInfo | None:
+    pdf_path: os.PathLike[str] | str
+) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     with warnings.catch_warnings(), rasterio.Env(GDAL_PDF_DPI=300):
         # Allow non-georeferenced plates to be skipped.
         warnings.simplefilter('error', rasterio.errors.NotGeoreferencedWarning)
@@ -104,16 +105,17 @@ def faa_tpp_iap_georef_chart_rasterio(
                     crs_dict['datum'],  # 'NAD83', or 'WGS84' or 'EPSG:4326'
                     (xy_tl[0], xy_bl[0], xy_tr[0], xy_br[0]),
                     (xy_tl[1], xy_bl[1], xy_tr[1], xy_br[1]))
-                ll_tl, ll_bl, ll_tr, ll_br = (
-                    LatLon(ll_wgs84[1][i], ll_wgs84[0][i]) for i in range(4))
+                ll_tl, ll_bl, ll_tr, ll_br = (faa_tpp_iap_georef_types.LatLon(
+                    ll_wgs84[1][i], ll_wgs84[0][i]) for i in range(4))
 
-                return ChartGeorefInfo(
+                return faa_tpp_iap_georef_types.ChartGeorefInfo(
                     os.path.basename(pdf_path),
                     crs_dict,
                     rio.crs.to_wkt(version='WKT1_ESRI'),
                     crs_dict['lat_1'],
                     crs_dict['lat_2'],
-                    LatLon(crs_dict['lat_0'], crs_dict['lon_0']),
+                    faa_tpp_iap_georef_types.LatLon(crs_dict['lat_0'],
+                                                    crs_dict['lon_0']),
                     {
                         (0.0, 1.0): ll_tl,
                         (0.0, 0.0): ll_bl,
@@ -157,7 +159,7 @@ class _FaaTppIapGeorefOutputInterface(abc.ABC):
     def add_chart(
         self,
         chart_el: xml.etree.ElementTree.Element,
-        georef_info: ChartGeorefInfo,
+        georef_info: faa_tpp_iap_georef_types.ChartGeorefInfo,
     ) -> None:
         ...
 
@@ -207,7 +209,7 @@ class _FaaTppIapGeorefCsvOutput(_FaaTppIapGeorefOutputInterface):
     def add_chart(
         self,
         chart_el: xml.etree.ElementTree.Element,
-        georef_info: ChartGeorefInfo,
+        georef_info: faa_tpp_iap_georef_types.ChartGeorefInfo,
     ) -> None:
         # Write this chart’s information to the CSV output.
         self._csv_writer.writerow((
@@ -239,7 +241,7 @@ def _xml_el(
 
 
 def _georeferencing_el(
-        georef_info: ChartGeorefInfo,
+        georef_info: faa_tpp_iap_georef_types.ChartGeorefInfo,
         *,
         precision: int | None = None) -> xml.etree.ElementTree.Element:
     # This only has one caller, but it’s broken into its own function to reduce
@@ -303,7 +305,7 @@ class _FaaTppIapGeorefXmlOutput(_FaaTppIapGeorefOutputInterface):
     def add_chart(
         self,
         chart_el: xml.etree.ElementTree.Element,
-        georef_info: ChartGeorefInfo,
+        georef_info: faa_tpp_iap_georef_types.ChartGeorefInfo,
     ) -> None:
         # Insert this chart’s information into the XML structure.
         chart_el.append(
@@ -334,7 +336,8 @@ def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
 def faa_tpp_iap_georef(
     tpp_dir: os.PathLike[str] | str,
     georef_chart_f: typing.Callable[[os.PathLike[str] | str],
-                                    ChartGeorefInfo | None],
+                                    faa_tpp_iap_georef_types.ChartGeorefInfo |
+                                    None],
     output_cls: type[_FaaTppIapGeorefOutputInterface],
     output_file: typing.TextIO,
     *,

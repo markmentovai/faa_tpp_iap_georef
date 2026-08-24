@@ -46,7 +46,7 @@ else:
 PDF_MODULES = tuple(_pdf_modules_l)
 del _pdf_modules_l
 
-from faa_tpp_iap_georef_types import ChartGeorefInfo, LatLon
+import faa_tpp_iap_georef_types
 import lambert_conformal_conic
 
 
@@ -155,8 +155,8 @@ class Rect:
 
 
 def _georef_chart_page(
-        pdf_path: os.PathLike[str] | str,
-        page: pikepdf.Page | pypdf.PageObject) -> ChartGeorefInfo | None:
+    pdf_path: os.PathLike[str] | str, page: pikepdf.Page | pypdf.PageObject
+) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     if '/VP' not in page:
         # Not georeferenced.
         return None
@@ -338,7 +338,7 @@ def _georef_chart_page(
         lls[cor_name] = lambert.reverse(p_e * projection_unit,
                                         p_n * projection_unit)
 
-    return ChartGeorefInfo(
+    return faa_tpp_iap_georef_types.ChartGeorefInfo(
         os.path.basename(pdf_path),
         {
             'proj': 'lcc',  # This was checked in wkt above.
@@ -347,25 +347,35 @@ def _georef_chart_page(
         str(wkt),
         lambert_sp_lat_1,
         lambert_sp_lat_2,
-        LatLon(lambert_ori_lat, lambert_ori_lon),
+        faa_tpp_iap_georef_types.LatLon(lambert_ori_lat, lambert_ori_lon),
         {
-            (0.0, 1.0): LatLon(*(angle.deg for angle in lls['tl'])),
-            (0.0, 0.0): LatLon(*(angle.deg for angle in lls['bl'])),
-            (1.0, 1.0): LatLon(*(angle.deg for angle in lls['tr'])),
-            (1.0, 0.0): LatLon(*(angle.deg for angle in lls['br']))
+            (0.0, 1.0):
+                faa_tpp_iap_georef_types.LatLon(
+                    *(angle.deg for angle in lls['tl'])),
+            (0.0, 0.0):
+                faa_tpp_iap_georef_types.LatLon(
+                    *(angle.deg for angle in lls['bl'])),
+            (1.0, 1.0):
+                faa_tpp_iap_georef_types.LatLon(
+                    *(angle.deg for angle in lls['tr'])),
+            (1.0, 0.0):
+                faa_tpp_iap_georef_types.LatLon(
+                    *(angle.deg for angle in lls['br']))
         },
     )
 
 
 def faa_tpp_iap_georef_chart_diy_pikepdf(
-        pdf_path: os.PathLike[str] | str) -> ChartGeorefInfo | None:
+    pdf_path: os.PathLike[str] | str
+) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     with pikepdf.Pdf.open(os.fspath(pdf_path)) as pdf:
         page, = pdf.pages
         return _georef_chart_page(pdf_path, page)
 
 
 def faa_tpp_iap_georef_chart_diy_pypdf(
-        pdf_path: os.PathLike[str] | str) -> ChartGeorefInfo | None:
+    pdf_path: os.PathLike[str] | str
+) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     with pypdf.PdfReader(os.fspath(pdf_path)) as pdf:
         if pdf.get_num_pages() != 1:
             raise ValueError(pdf.get_num_pages())
@@ -375,9 +385,10 @@ def faa_tpp_iap_georef_chart_diy_pypdf(
 
 
 def faa_tpp_iap_georef_chart_diy(
-        pdf_path: os.PathLike[str] | str,
-        *,
-        pdf_module: str | None = None) -> ChartGeorefInfo | None:
+    pdf_path: os.PathLike[str] | str,
+    *,
+    pdf_module: str | None = None
+) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     if pdf_module is None:
         pdf_module = PDF_MODULES[0]
 
