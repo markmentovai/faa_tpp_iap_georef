@@ -15,6 +15,7 @@
 # pyright: strict
 
 import decimal
+import itertools
 import math
 import os
 import re
@@ -154,6 +155,25 @@ class Rect:
         return self._y + self._h
 
 
+def _transform_en_from_to_rect(
+    en_rect: Rect,
+    from_rect: Rect,
+    to_rect: Rect,
+) -> Rect:
+    # Transforms the “en” (easting/northing) coordinates in `en_rect` that
+    # correspond to x/y coordinates in `from_rect` to be the easting/northing
+    # values corresponding the x/y coordinates in `to_rect`.
+    #
+    # This can be used to “expand” easting/northing coordinates from a smaller
+    # rectangle within a page to a larger one, such as converting from LPTS to a
+    # viewport BBox, or from a viewport BBox to the page’s MediaBox/CropBox.
+    return Rect.from_lbrt(
+        en_rect.l + en_rect.w * ((to_rect.l - from_rect.l) / from_rect.w),
+        en_rect.b + en_rect.h * ((to_rect.b - from_rect.b) / from_rect.h),
+        en_rect.r + en_rect.w * ((to_rect.r - from_rect.r) / from_rect.w),
+        en_rect.t + en_rect.h * ((to_rect.t - from_rect.t) / from_rect.h))
+
+
 def _georef_chart_page(
     pdf_path: os.PathLike[str] | str, page: pikepdf.Page | pypdf.PageObject
 ) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
@@ -165,13 +185,12 @@ def _georef_chart_page(
     assert isinstance(viewport_array,
                       (pikepdf.Array, pypdf.generic.ArrayObject))
     viewport, = viewport_array
-    bbox = Rect.from_pdf_box_array_obj(viewport['/BBox'])
     measure = viewport['/Measure']
     gcs = measure['/GCS']
     assert gcs['/Type'] == '/PROJCS'
     wkt = gcs['/WKT']
 
-    # This is very specific to the PDFs being consumed.
+    # This is very specific to the TPP PDFs being consumed.
     #
     # TODO: improve WKT parsing.
     #
@@ -225,118 +244,130 @@ def _georef_chart_page(
         lambert_false_northing,
     )
 
-    # TODO: Come up with better, more uniform naming for all of these variables.
-
-    bounds = Rect.from_pdf_polygon_array_obj(measure['/Bounds'])
     gpts = measure['/GPTS']
     assert isinstance(gpts, (pikepdf.Array, pypdf.generic.ArrayObject))
-    bl_lat, bl_lon, br_lat, br_lon, tr_lat, tr_lon, tl_lat, tl_lon = (
-        lambert_conformal_conic.Angle(float(x), 'deg') for x in gpts)
+    gpt_ll_bl, gpt_ll_br, gpt_ll_tr, gpt_ll_tl = tuple(
+        itertools.batched(
+            (lambert_conformal_conic.Angle(float(x), 'deg') for x in gpts),
+            2,
+            strict=True))
 
-    bl_e, bl_n = lambert.forward(bl_lat, bl_lon)
-    br_e, br_n = lambert.forward(br_lat, br_lon)
-    tl_e, tl_n = lambert.forward(tl_lat, tl_lon)
-    tr_e, tr_n = lambert.forward(tr_lat, tr_lon)
+    # “en” is easting/northing.
+    gpt_en_bl_e, gpt_en_bl_n = lambert.forward(*gpt_ll_bl)
+    gpt_en_br_e, gpt_en_br_n = lambert.forward(*gpt_ll_br)
+    gpt_en_tr_e, gpt_en_tr_n = lambert.forward(*gpt_ll_tr)
+    gpt_en_tl_e, gpt_en_tl_n = lambert.forward(*gpt_ll_tl)
 
-    # This is only valid if the difference between (bl_e, tl_e) and other pairs
-    # is very small. Empirically, 1e-7 is acceptable.
+    # This is only valid if the difference between (gpt_en_bl_e, gpt_en_tl_e)
+    # and between other pairs is very small (effectively zero). The tolerance
+    # values were chosen empirically.
     if not all((
-            math.isclose(bl_e, tl_e, rel_tol=1e-7),
-            math.isclose(br_e, tr_e, rel_tol=1e-7),
-            math.isclose(bl_n, br_n, rel_tol=1e-7),
-            math.isclose(tl_n, tr_n, rel_tol=1e-7),
+            math.isclose(gpt_en_bl_e, gpt_en_tl_e, rel_tol=1e-7),
+            math.isclose(gpt_en_br_e, gpt_en_tr_e, rel_tol=1e-7),
+            math.isclose(gpt_en_bl_n, gpt_en_br_n, rel_tol=1e-7),
+            math.isclose(gpt_en_tl_n, gpt_en_tr_n, rel_tol=1e-7),
     )):
-        # TODO: Deal with this. Alternatively, get the underlying data fixed,
-        # and raise an exception if it ever occurs again.
-        #
-        # 05018IL5.PDF (PPG/NSTU ILS or LOC 5) in cycle 2605 has a very slightly
-        # rotated plan view. I had originally thought that this would need to
-        # fall back to a least squares solution, but given that the rotation is
-        # uniform (bl_e - tl_e == br_e - tr_e, bl_n
-        # - br_n == tl_n - tr_n), it’s probably possible to just determine the
-        # rotation and build a transform around that. Of course, a least-squares
-        # solution would be most general. For least-squares, see gdal
-        # gcore/gdal_misc.cpp GDALGCPsToGeoTransform as called by
-        # frmts/pdf/pdfdataset.cpp PDFDataset::ParseMeasure.
-        if not all((math.isclose(tl_e - bl_e, tr_e - br_e, rel_tol=1e-7),
-                    math.isclose(br_n - bl_n, tr_n - tl_n, rel_tol=1e-7))):
-            raise ValueError(
-                'not close',
-                bl_e - tl_e,
-                br_e - tr_e,
-                bl_n - br_n,
-                tl_n - tr_n,
-            )
+        # If the differences are nonzero but they are uniform enough, the plan
+        # view has been rotated away from true north being up. In cycle 2608,
+        # this only occurs for 05018IL5.PDF (PPG/NSTU ILS or LOC 5). It is
+        # possible to deal with this, but the chart is probably in error and
+        # should be corrected, so just make it a warning for now.
+        if all((math.isclose(gpt_en_tl_e - gpt_en_bl_e,
+                             gpt_en_tr_e - gpt_en_br_e,
+                             rel_tol=1e-7),
+                math.isclose(gpt_en_br_n - gpt_en_bl_n,
+                             gpt_en_tr_n - gpt_en_tl_n,
+                             rel_tol=1e-7))):
+            rot0_rad = math.atan2(
+                statistics.fmean(
+                    (gpt_en_tl_e - gpt_en_bl_e, gpt_en_tr_e - gpt_en_br_e)),
+                statistics.fmean(
+                    (gpt_en_tl_n - gpt_en_bl_n, gpt_en_tr_n - gpt_en_br_n)))
+            rot1_rad = math.atan2(
+                statistics.fmean(
+                    (gpt_en_br_n - gpt_en_bl_n, gpt_en_tr_n - gpt_en_tl_n)),
+                statistics.fmean(
+                    (gpt_en_tr_e - gpt_en_tl_e, gpt_en_br_e - gpt_en_bl_e)))
+            assert math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7)
+            rot_rad = statistics.fmean((rot0_rad, -rot1_rad))
 
-        rot0_rad = math.atan2(statistics.fmean((tl_e - bl_e, tr_e - br_e)),
-                              statistics.fmean((tl_n - bl_n, tr_n - br_n)))
-        rot1_rad = math.atan2(statistics.fmean((br_n - bl_n, tr_n - tl_n)),
-                              statistics.fmean((tr_e - tl_e, br_e - bl_e)))
-        assert math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7)
-        rot_rad = statistics.fmean((rot0_rad, -rot1_rad))
+            warnings.warn('PDF chart %s is rotated by %f°' %
+                          (pdf_path, math.degrees(rot_rad)))
 
-        warnings.warn('PDF chart %s is rotated by %f°' %
-                      (pdf_path, math.degrees(rot_rad)))
+            return None
 
-        return None
+        # Some other transformation has been applied, like a skew. That’s
+        # unexpected! Don’t handle it.
+        raise ValueError(
+            'not close',
+            gpt_en_bl_e - gpt_en_tl_e,
+            gpt_en_br_e - gpt_en_tr_e,
+            gpt_en_bl_n - gpt_en_br_n,
+            gpt_en_tl_n - gpt_en_tr_n,
+        )
 
-    # l_* correspond to the LPTS.
-    l_e0 = statistics.fmean((bl_e, tl_e)) / projection_unit
-    l_e1 = statistics.fmean((br_e, tr_e)) / projection_unit
-    l_n0 = statistics.fmean((bl_n, br_n)) / projection_unit
-    l_n1 = statistics.fmean((tl_n, tr_n)) / projection_unit
-    l_efull = l_e1 - l_e0
-    l_nfull = l_n1 - l_n0
+    # Easting/northing for the GPTS coordinates, arranged as a rectangle.
+    gpts_en = Rect.from_lbrt(statistics.fmean((gpt_en_bl_e, gpt_en_tl_e)),
+                             statistics.fmean((gpt_en_bl_n, gpt_en_br_n)),
+                             statistics.fmean((gpt_en_br_e, gpt_en_tr_e)),
+                             statistics.fmean((gpt_en_tl_n, gpt_en_tr_n)))
 
+    # LPTS are unit square coordinates (range 0–1) relative to the viewport
+    # BBox. In practice, TPP PDFs always use [0.1 0.1 0.9 0.1 0.9 0.9 0.1 0.9],
+    # covering .8 of the width and .8 of the height of the viewport BBox.
     lpts = Rect.from_pdf_polygon_array_obj(measure['/LPTS'])
+    assert lpts.l <= lpts.r
+    assert lpts.b <= lpts.t
 
-    # In practice, the LPTS cover a range of .1 to .9 inside the bbox. Now work
-    # out the bbox.
-    b_e0 = l_e0 - l_efull * ((lpts.l - bounds.l) / lpts.w)
-    b_e1 = l_e1 + l_efull * ((bounds.r - lpts.r) / lpts.w)
-    b_n0 = l_n0 - l_nfull * ((lpts.b - bounds.b) / lpts.h)
-    b_n1 = l_n1 + l_nfull * ((bounds.t - lpts.t) / lpts.h)
-    b_efull = b_e1 - b_e0
-    b_nfull = b_n1 - b_n0
+    # “Expand” to get easting/northing at the corners of the viewport BBox.
+    viewport_bbox_en = _transform_en_from_to_rect(
+        gpts_en, lpts, Rect.from_lbrt(0.0, 0.0, 1.0, 1.0))
 
-    # There’s also ArtBox, TrimBox, BleedBox, and CropBox, but GDAL seems to
-    # only use the MediaBox. gdal frmts/pdf/pdfdataset.cpp
-    # PDFDataset::ParseMeasure. Just match that.
+    # The viewport BBox is in page coordinates (1/72″). In practice, TPP PDFs
+    # all have a viewport BBox of [9.18 2.628 378.18 591.372].
+    viewport_bbox = Rect.from_pdf_box_array_obj(viewport['/BBox'])
+
+    # The x-axis and y-axis scales should be identical. The tolerance value was
+    # chosen empirically.
+    #
+    # This comparison is done in ellipsoid units (specified in meters in
+    # practice) per PDF page coordinate unit (1/72″), which isn’t terribly
+    # helpful in itself, but the calculation would be the same if it was
+    # converted to something more useful like the cartographic scale.
+    if not math.isclose(viewport_bbox_en.h / viewport_bbox.h,
+                        viewport_bbox_en.w / viewport_bbox.w,
+                        rel_tol=1e-9):
+        raise ValueError(
+            'unequal scale',
+            viewport_bbox_en.h / viewport_bbox.h,
+            viewport_bbox_en.w / viewport_bbox.w,
+        )
+
+    # There are also ArtBox, TrimBox, BleedBox, and CropBox. Of these, there are
+    # arguments for using either MediaBox or CropBox. GDAL seems to only
+    # MediaBox (gdal frmts/pdf/pdfdataset.cpp PDFDataset::ParseMeasure). Just
+    # match that. Thse are in page coordinates (1/72″). In practice, in TPP
+    # PDFs, both MediaBox and CropBox are supplied and are identical: [0 0
+    # 387.36 594], for page dimensions of 5.38″×8.25″.
     page_box = Rect.from_pdf_box_array_obj(page['/MediaBox'])
 
-    # TODO: Unify the calculation of the “b” and “p” values, which follow the
-    # same algorithm to “expand” into the space of an enclosing box.
-
-    # In practice, the bbox is [9.18 2.628 378.18 591.372] relative to the page
-    # box, [0 0 387.36 594]. Now work out the page. These correspond to `gdal
-    # info`’s “Upper/Lower Left/Right” coordinates on the length scale.
-    p_e0 = b_e0 - b_efull * ((bbox.l - page_box.l) / bbox.w)
-    p_e1 = b_e1 + b_efull * ((page_box.r - bbox.r) / bbox.w)
-    p_n0 = b_n0 - b_nfull * ((bbox.b - page_box.b) / bbox.h)
-    p_n1 = b_n1 + b_nfull * ((page_box.t - bbox.t) / bbox.h)
-    p_efull = p_e1 - p_e0
-    p_nfull = p_n1 - p_n0
-
-    # The center of the image (`gdal info`’s “Center” coordinates).
-    p_cx = p_e0 + p_efull / 2
-    p_cy = p_n0 + p_nfull / 2
+    # “Expand” to get easting/northing at the page corners.
+    page_en = _transform_en_from_to_rect(viewport_bbox_en, viewport_bbox,
+                                         page_box)
 
     # Determine the geographic coordinates corresponding to the page corners and
-    # center. These correspond to `gdal info`’s “Upper/Lower Left/Right” and
-    # “Center” coordinates in geographic terms. It also has a translation of the
-    # origin, for good measure.
-    lls: dict[str, tuple[lambert_conformal_conic.Angle,
-                         lambert_conformal_conic.Angle]] = {}
-    for cor_name, p_e, p_n in (
-        ('tl', p_e0, p_n1),
-        ('bl', p_e0, p_n0),
-        ('tr', p_e1, p_n1),
-        ('br', p_e1, p_n0),
-        ('cc', p_cx, p_cy),
-        ('or', 0, 0),
-    ):
-        lls[cor_name] = lambert.reverse(p_e * projection_unit,
-                                        p_n * projection_unit)
+    # center. These correspond to `gdal info`’s “Upper/Lower Left/Right”
+    # coordinates in geographic terms.
+    page_ll = dict((xy,
+                    faa_tpp_iap_georef_types.LatLon(
+                        *(angle.deg
+                          for angle in lambert.reverse(*page_en))))
+                   for xy, page_en in (
+                       ((0.0, 0.0), (page_en.l, page_en.b)),
+                       ((1.0, 0.0), (page_en.r, page_en.b)),
+                       ((1.0, 1.0), (page_en.r, page_en.t)),
+                       ((0.0, 1.0), (page_en.l, page_en.t)),
+                   ))
 
     return faa_tpp_iap_georef_types.ChartGeorefInfo(
         os.path.basename(pdf_path),
@@ -348,20 +379,7 @@ def _georef_chart_page(
         lambert_sp_lat_1,
         lambert_sp_lat_2,
         faa_tpp_iap_georef_types.LatLon(lambert_ori_lat, lambert_ori_lon),
-        {
-            (0.0, 1.0):
-                faa_tpp_iap_georef_types.LatLon(
-                    *(angle.deg for angle in lls['tl'])),
-            (0.0, 0.0):
-                faa_tpp_iap_georef_types.LatLon(
-                    *(angle.deg for angle in lls['bl'])),
-            (1.0, 1.0):
-                faa_tpp_iap_georef_types.LatLon(
-                    *(angle.deg for angle in lls['tr'])),
-            (1.0, 0.0):
-                faa_tpp_iap_georef_types.LatLon(
-                    *(angle.deg for angle in lls['br']))
-        },
+        page_ll,
     )
 
 
