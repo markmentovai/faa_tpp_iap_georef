@@ -357,7 +357,9 @@ def faa_tpp_iap_georef(
     pdf_names_gen = (
         _chart_el_to_pdf_name(chart_el) for chart_el in chart_els_gen_tee[0])
 
-    executor_cls = (_ImmediateExecutor if parallel == 1 else
+    executor_cls = (_ImmediateExecutor if
+                    (parallel == 1 or
+                     (parallel is None and os.process_cpu_count() == 1)) else
                     concurrent.futures.ProcessPoolExecutor)
     with (
             executor_cls(max_workers=parallel) as executor,
@@ -375,18 +377,41 @@ def faa_tpp_iap_georef(
 
 
 def main(args: typing.Sequence[str]) -> int | None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--parallel', type=int)
-    parser.add_argument('--strategy',
-                        choices=_STRATEGIES,
-                        default=_STRATEGIES[0])
-    parser.add_argument('--diy-pdf-module',
-                        choices=faa_tpp_iap_georef_diy.PDF_MODULES,
-                        default=faa_tpp_iap_georef_diy.PDF_MODULES[0])
-    parser.add_argument('--format', choices=('xml', 'csv'), default='xml')
-    parser.add_argument('--precision', type=int, default=7)
-    parser.add_argument('tpp_dir')
-    parser.add_argument('out_path', nargs='?')
+    parser = argparse.ArgumentParser(
+        description=
+        'Extract georeferencing metadata from FAA TPP IAP PDF charts.')
+    parser.add_argument(
+        '--parallel',
+        type=int,
+        help='number of concurrent operations to perform (default: the number '
+        'of CPUs available)')
+    parser.add_argument(
+        '--strategy',
+        choices=_STRATEGIES,
+        default=_STRATEGIES[0],
+        help=('method to extract metadata from PDFs, (default: %s)' %
+              _STRATEGIES[0]))
+    parser.add_argument(
+        '--diy-pdf-module',
+        choices=faa_tpp_iap_georef_diy.PDF_MODULES,
+        default=faa_tpp_iap_georef_diy.PDF_MODULES[0],
+        help=('PDF module to use with --strategy=diy (default: %s)' %
+              faa_tpp_iap_georef_diy.PDF_MODULES[0]))
+    parser.add_argument('--format',
+                        choices=('xml', 'csv'),
+                        default='xml',
+                        help='output format (default: xml)')
+    parser.add_argument(
+        '--precision',
+        type=int,
+        default=7,
+        help='precision of derived geographic coordinates (default: 7)')
+    parser.add_argument(
+        'tpp_dir',
+        help='directory containing d-TPP_Metafile.xml and chart PDFs')
+    parser.add_argument('out_path',
+                        nargs='?',
+                        help='output file to write (default: stdout)')
     parsed = parser.parse_args(args)
 
     if parsed.strategy == 'rasterio':
