@@ -28,9 +28,19 @@ import typing
 import warnings
 import xml.etree.ElementTree
 
-import rasterio
-import rasterio.errors
-import rasterio.warp
+if typing.TYPE_CHECKING:
+    import rasterio
+    import rasterio.errors
+    import rasterio.warp
+    _STRATEGIES = ('rasterio', 'diy')
+else:
+    try:
+        import rasterio
+        import rasterio.errors
+        import rasterio.warp
+        _STRATEGIES = ('rasterio', 'diy')
+    except ImportError:
+        _STRATEGIES = ('diy',)
 
 import faa_tpp_iap_georef_diy
 from faa_tpp_iap_georef_types import ChartGeorefInfo, LatLon
@@ -64,7 +74,7 @@ class _ImmediateExecutor(concurrent.futures.Executor):
         return future
 
 
-def faa_tpp_iap_georef_chart(
+def faa_tpp_iap_georef_chart_rasterio(
         pdf_path: os.PathLike[str] | str) -> ChartGeorefInfo | None:
     with warnings.catch_warnings(), rasterio.Env(GDAL_PDF_DPI=300):
         # Allow non-georeferenced plates to be skipped.
@@ -323,7 +333,8 @@ def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
 
 def faa_tpp_iap_georef(
     tpp_dir: os.PathLike[str] | str,
-    georef_chart_f: typing.Callable[[str], ChartGeorefInfo | None],
+    georef_chart_f: typing.Callable[[os.PathLike[str] | str],
+                                    ChartGeorefInfo | None],
     output_cls: type[_FaaTppIapGeorefOutputInterface],
     output_file: typing.TextIO,
     *,
@@ -364,22 +375,22 @@ def main(args: typing.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--parallel', type=int)
     parser.add_argument('--strategy',
-                        choices=('rasterio', 'diy'),
-                        default='rasterio')
-    parser.add_argument('--format', choices=('csv', 'xml'), default='xml')
+                        choices=_STRATEGIES,
+                        default=_STRATEGIES[0])
+    parser.add_argument('--format', choices=('xml', 'csv'), default='xml')
     parser.add_argument('--precision', type=int, default=7)
     parser.add_argument('tpp_dir')
     parser.add_argument('out_path', nargs='?')
     parsed = parser.parse_args(args)
 
     georef_chart_f = {
-        'rasterio': faa_tpp_iap_georef_chart,
+        'rasterio': faa_tpp_iap_georef_chart_rasterio,
         'diy': faa_tpp_iap_georef_diy.faa_tpp_iap_georef_chart_diy,
     }[parsed.strategy]
 
     output_cls = {
-        'csv': _FaaTppIapGeorefCsvOutput,
         'xml': _FaaTppIapGeorefXmlOutput,
+        'csv': _FaaTppIapGeorefCsvOutput,
     }[parsed.format]
 
     if parsed.out_path is None:
