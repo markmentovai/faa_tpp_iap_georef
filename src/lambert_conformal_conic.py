@@ -43,8 +43,7 @@ class Ellipsoid:
                  b: float | None = None,
                  inv_f: float | None = None):
         self._a = a  # a
-        if not ((b is not None) ^ (inv_f is not None)):
-            raise ValueError('Must provide exactly one of b and inv_f')
+        assert (b is not None) ^ (inv_f is not None)
         if b is not None:
             self._b = b  # b
             self._inv_f = a / (a - b)  # 1/f
@@ -86,13 +85,16 @@ class Ellipsoid:
 class Angle:
     __slots__ = ('_rad',)
 
-    def __init__(self, value: float, unit: str):
+    def __init__(
+        self,
+        value: float,
+        unit: typing.Literal['rad'] | typing.Literal['deg'],
+    ):
         if unit == 'rad':
             self._rad = value
-        elif unit == 'deg':
-            self._rad = math.radians(value)
         else:
-            raise ValueError(unit)
+            assert unit == 'deg'
+            self._rad = math.radians(value)
 
     @property
     def rad(self) -> float:

@@ -57,8 +57,7 @@ _P = typing.ParamSpec("_P")
 class _ImmediateExecutor(concurrent.futures.Executor):
 
     def __init__(self, max_workers: int | None = None):
-        if max_workers is not None and max_workers != 1:
-            raise ValueError(type(self).__name__ + ' only supports 1 worker')
+        assert max_workers is None or max_workers == 1
 
     @typing.override
     def submit(
@@ -90,12 +89,18 @@ def faa_tpp_iap_georef_chart_rasterio(
             with rasterio.open(pdf_path) as rio:
                 crs_dict = rio.crs.to_dict()
 
-                assert crs_dict['proj'] == 'lcc'
-                assert crs_dict['x_0'] == 0
-                assert crs_dict['y_0'] == 0
-                assert crs_dict['datum'] == 'NAD83'
-                assert crs_dict['units'] == 'us-in'
-                assert crs_dict['no_defs']  # no defaults were used
+                faa_tpp_iap_georef_types.DataError.raise_if_ne(
+                    crs_dict['proj'], 'lcc')
+                faa_tpp_iap_georef_types.DataError.raise_if_ne(
+                    crs_dict['x_0'], 0)
+                faa_tpp_iap_georef_types.DataError.raise_if_ne(
+                    crs_dict['y_0'], 0)
+                faa_tpp_iap_georef_types.DataError.raise_if_ne(
+                    crs_dict['datum'], 'NAD83')
+                faa_tpp_iap_georef_types.DataError.raise_if_ne(
+                    crs_dict['units'], 'us-in')
+                faa_tpp_iap_georef_types.DataError.raise_if_false(
+                    crs_dict['no_defs'])  # no defaults were used
 
                 # Corner coordinates. “xy” are Cartesian, distances from the
                 # origin.
@@ -366,7 +371,8 @@ def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
                        parallel: int | None = 1) -> None:
     metafile = xml.etree.ElementTree.parse(
         os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
-    assert metafile.getroot().tag == 'digital_tpp'
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(metafile.getroot().tag,
+                                                   'digital_tpp')
 
     # Scan d-TPP_Metafile.xml for charts. Only look at IAPs, and don’t look at
     # anything that’s been deleted.

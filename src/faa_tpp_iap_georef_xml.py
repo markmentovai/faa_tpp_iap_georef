@@ -31,6 +31,19 @@ import rasterio.errors
 import rasterio.warp
 
 
+class DataError(Exception):
+
+    @classmethod
+    def raise_if_false(cls, value: typing.Any) -> None:
+        if not value:
+            raise cls('not %r' % value)
+
+    @classmethod
+    def raise_if_ne(cls, a: typing.Any, b: typing.Any) -> None:
+        if a != b:
+            raise cls('%r != %r' % (a, b))
+
+
 def _xml_el(
     tag: str,
     attrib: dict[str, str] = {},
@@ -103,7 +116,7 @@ def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
                            xml_write_file: typing.TextIO) -> None:
     metafile = xml.etree.ElementTree.parse(
         os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
-    assert metafile.getroot().tag == 'digital_tpp'
+    DataError.raise_if_ne(metafile.getroot().tag, 'digital_tpp')
 
     # Scan d-TPP_Metafile.xml for charts. Only look at IAPs, and don’t look at
     # anything that’s been deleted.
@@ -123,12 +136,13 @@ def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
                 with rasterio.open(os.path.join(tpp_dir, pdf_name)) as rio:
                     crs_dict = rio.crs.to_dict()
 
-                    assert crs_dict['proj'] == 'lcc'
-                    assert crs_dict['x_0'] == 0
-                    assert crs_dict['y_0'] == 0
-                    assert crs_dict['datum'] == 'NAD83'
-                    assert crs_dict['units'] == 'us-in'
-                    assert crs_dict['no_defs']  # no defaults were used
+                    DataError.raise_if_ne(crs_dict['proj'], 'lcc')
+                    DataError.raise_if_ne(crs_dict['x_0'], 0)
+                    DataError.raise_if_ne(crs_dict['y_0'], 0)
+                    DataError.raise_if_ne(crs_dict['datum'], 'NAD83')
+                    DataError.raise_if_ne(crs_dict['units'], 'us-in')
+                    DataError.raise_if_false(
+                        crs_dict['no_defs'])  # no defaults were used
 
                     # Corner coordinates. “xy” are Cartesian, distances from the
                     # origin.

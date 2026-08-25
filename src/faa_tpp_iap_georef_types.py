@@ -32,3 +32,21 @@ class ChartGeorefInfo(typing.NamedTuple):
     sp_lat_2: float
     origin: LatLon
     control_points: typing.Mapping[tuple[float, float], LatLon]
+
+
+class DataError(Exception):
+
+    @classmethod
+    def raise_if_false(cls, value: typing.Any) -> None:
+        if not value:
+            raise cls('not %r' % value)
+
+    @classmethod
+    def raise_if_ne(cls, a: typing.Any, b: typing.Any) -> None:
+        if a != b:
+            raise cls('%r != %r' % (a, b))
+
+    @classmethod
+    def raise_if_gt(cls, a: typing.Any, b: typing.Any) -> None:
+        if a > b:
+            raise cls('%r > %r' % (a, b))

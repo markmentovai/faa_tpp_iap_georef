@@ -118,8 +118,8 @@ class _Rect:
             pdf_cor_array: pikepdf.Array | pypdf.generic.ArrayObject) -> _Rect:
         if len(pdf_cor_array) == 10:
             blx, bly, brx, bry, trx, tr_y, tlx, tly, blx2, bly2 = pdf_cor_array
-            assert blx2 == blx
-            assert bly2 == bly
+            faa_tpp_iap_georef_types.DataError.raise_if_ne(blx2, blx)
+            faa_tpp_iap_georef_types.DataError.raise_if_ne(bly2, bly)
         else:
             blx, bly, brx, bry, trx, tr_y, tlx, tly = pdf_cor_array
         assert isinstance(blx, (decimal.Decimal, float, int))
@@ -130,10 +130,10 @@ class _Rect:
         assert isinstance(tr_y, (decimal.Decimal, float, int))
         assert isinstance(tlx, (decimal.Decimal, float, int))
         assert isinstance(tly, (decimal.Decimal, float, int))
-        assert blx == tlx
-        assert brx == trx
-        assert bly == bry
-        assert tly == tr_y
+        faa_tpp_iap_georef_types.DataError.raise_if_ne(blx, tlx)
+        faa_tpp_iap_georef_types.DataError.raise_if_ne(brx, trx)
+        faa_tpp_iap_georef_types.DataError.raise_if_ne(bly, bry)
+        faa_tpp_iap_georef_types.DataError.raise_if_ne(tly, tr_y)
         return cls.from_lbrt(float(blx), float(bly), float(trx), float(tr_y))
 
     @classmethod
@@ -191,7 +191,8 @@ def _transform_en_from_to_rect(
     #
     # This can be used to “expand” easting/northing coordinates from a smaller
     # rectangle within a page to a larger one, such as converting from LPTS to a
-    # viewport BBox, or from a viewport BBox to the page’s MediaBox/CropBox.
+    # georeferencing viewport BBox, or from a georeferencing viewport BBox to
+    # the page’s MediaBox/CropBox.
     return _Rect.from_lbrt(
         en_rect.l + en_rect.w * ((to_rect.l - from_rect.l) / from_rect.w),
         en_rect.b + en_rect.h * ((to_rect.b - from_rect.b) / from_rect.h),
@@ -209,10 +210,10 @@ def _georef_chart_page(
     viewport_array = page['/VP']
     assert isinstance(viewport_array,
                       (pikepdf.Array, pypdf.generic.ArrayObject))
-    viewport, = viewport_array
+    viewport, = viewport_array  # The georeferencing viewport.
     measure = viewport['/Measure']
     gcs = measure['/GCS']
-    assert gcs['/Type'] == '/PROJCS'
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(gcs['/Type'], '/PROJCS')
     wkt = gcs['/WKT']
 
     # This is very specific to the TPP PDFs being consumed.
@@ -251,15 +252,17 @@ def _georef_chart_page(
         projection_unit,
     ) = (float(x) for x in match.groups())
 
-    assert ellipsoid_a == 6378137.0
-    assert ellipsoid_inv_f == 298.2572221
-    assert math.degrees(angle_unit) == 1.0
-    assert lambert_false_easting == 0.0
-    assert lambert_false_northing == 0.0
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(ellipsoid_a, 6378137.0)
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(ellipsoid_inv_f, 298.2572221)
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(math.degrees(angle_unit),
+                                                   1.0)
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(lambert_false_easting, 0.0)
+    faa_tpp_iap_georef_types.DataError.raise_if_ne(lambert_false_northing, 0.0)
 
     # These inches are based on the US survey foot, 39.37 survey inches per
     # meter. TPP PDFs only give 13 digits beyond the decimal point.
-    assert math.isclose(projection_unit, 1 / 39.37, rel_tol=1e-13)
+    faa_tpp_iap_georef_types.DataError.raise_if_false(
+        math.isclose(projection_unit, 1 / 39.37, rel_tol=1e-13))
 
     lambert = lambert_conformal_conic.LambertConformalConic(
         lambert_conformal_conic.Ellipsoid(ellipsoid_a, inv_f=ellipsoid_inv_f),
@@ -313,7 +316,8 @@ def _georef_chart_page(
             rot1_rad = math.atan2(
                 ((gpt_en_br_n - gpt_en_bl_n) + (gpt_en_tr_n - gpt_en_tl_n)) / 2,
                 ((gpt_en_tr_e - gpt_en_tl_e) + (gpt_en_br_e - gpt_en_bl_e)) / 2)
-            assert math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7)
+            faa_tpp_iap_georef_types.DataError.raise_if_false(
+                math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7))
             rot_rad = (rot0_rad - rot1_rad) / 2
 
             warnings.warn('PDF chart %s is rotated by %f°' %
@@ -323,7 +327,7 @@ def _georef_chart_page(
 
         # Some other transformation has been applied, like a skew. That’s
         # unexpected! Don’t handle it.
-        raise ValueError(
+        raise faa_tpp_iap_georef_types.DataError(
             'not close',
             gpt_en_bl_e - gpt_en_tl_e,
             gpt_en_br_e - gpt_en_tr_e,
@@ -339,33 +343,37 @@ def _georef_chart_page(
         (gpt_en_tl_n + gpt_en_tr_n) / 2,
     )
 
-    # LPTS are unit square coordinates (range 0–1) relative to the viewport
-    # BBox. In practice, TPP PDFs always use [0.1 0.1 0.9 0.1 0.9 0.9 0.1 0.9],
-    # covering .8 of the width and .8 of the height of the viewport BBox. These
-    # correspond 1:1 with the geographic GPTS and the easting/northing gpts_en.
+    # LPTS are unit square coordinates (range 0–1) relative to the
+    # georeferencing viewport BBox. In practice, TPP PDFs always use [0.1 0.1
+    # 0.9 0.1 0.9 0.9 0.1 0.9], covering .8 of the width and .8 of the height of
+    # the viewport BBox. These correspond 1:1 with the geographic GPTS and the
+    # easting/northing gpts_en.
     lpts = _Rect.from_pdf_polygon_array_obj(measure['/LPTS'])
-    assert lpts.l <= lpts.r
-    assert lpts.b <= lpts.t
+    faa_tpp_iap_georef_types.DataError.raise_if_gt(lpts.l, lpts.r)
+    faa_tpp_iap_georef_types.DataError.raise_if_gt(lpts.b, lpts.t)
 
-    # “Expand” to get easting/northing at the corners of the viewport BBox.
+    # “Expand” to get easting/northing at the corners of the georeferencing
+    # viewport BBox.
     viewport_bbox_en = _transform_en_from_to_rect(
         gpts_en, lpts, _Rect.from_lbrt(0.0, 0.0, 1.0, 1.0))
 
-    # The viewport BBox is in page coordinates (1/72″). In practice, TPP PDFs
-    # all have a viewport BBox of [9.18 2.628 378.18 591.372].
+    # The georeferencing viewport BBox is in page coordinates (1/72″). In
+    # practice, TPP PDFs all have a georeferencing viewport BBox of [9.18 2.628
+    # 378.18 591.372].
     viewport_bbox = _Rect.from_pdf_box_array_obj(viewport['/BBox'])
 
     # The x-axis and y-axis scales should be identical. The tolerance value was
     # chosen empirically.
     #
-    # This comparison is done in ellipsoid units (specified in meters in
-    # practice) per PDF page coordinate unit (1/72″), which isn’t terribly
-    # helpful in itself, but the calculation would be the same if it was
-    # converted to something more useful like the cartographic scale.
+    # This comparison is done in ellipsoid units per PDF page coordinate unit
+    # (1/72″). In practice, the ellipsoid is specified in meters. Real-world
+    # meters per PDF 1/72″ isn’t terribly helpful in itself, but the calculation
+    # would be the same if it was converted to something more useful like the
+    # cartographic scale.
     if not math.isclose(viewport_bbox_en.h / viewport_bbox.h,
                         viewport_bbox_en.w / viewport_bbox.w,
                         rel_tol=1e-9):
-        raise ValueError(
+        raise faa_tpp_iap_georef_types.DataError(
             'unequal scale',
             viewport_bbox_en.h / viewport_bbox.h,
             viewport_bbox_en.w / viewport_bbox.w,
@@ -423,8 +431,7 @@ def faa_tpp_iap_georef_chart_diy_pypdf(
     pdf_path: os.PathLike[str] | str
 ) -> faa_tpp_iap_georef_types.ChartGeorefInfo | None:
     with pypdf.PdfReader(os.fspath(pdf_path)) as pdf:
-        if pdf.get_num_pages() != 1:
-            raise ValueError(pdf.get_num_pages())
+        faa_tpp_iap_georef_types.DataError.raise_if_ne(pdf.get_num_pages(), 1)
         page = pdf.get_page(0)
 
         return _georef_chart_page(pdf_path, page)
