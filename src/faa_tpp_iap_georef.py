@@ -486,13 +486,16 @@ def main(args: typing.Sequence[str]) -> int | None:
 
     with _open_or_use(parsed.out_path, sys.stdout, 'w',
                       newline='\r\n') as out_file:
-        faa_tpp_iap_georef(parsed.tpp_dir,
-                           georef_chart_f,
-                           output_cls,
-                           out_file,
-                           precision=parsed.precision,
-                           projection_precision=parsed.projection_precision,
-                           parallel=parsed.parallel)
+        faa_tpp_iap_georef(
+            parsed.tpp_dir,
+            georef_chart_f,
+            output_cls,  # type: ignore[type-abstract]  # (mypy)
+            out_file,
+            precision=parsed.precision,
+            projection_precision=parsed.projection_precision,
+            parallel=parsed.parallel)
+
+    return None
 
 
 if __name__ == '__main__':
