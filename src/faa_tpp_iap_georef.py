@@ -137,7 +137,7 @@ def faa_tpp_iap_georef_chart_rasterio(
 # cycle 2608.
 def _f_p(f: float, precision: int | None) -> str:
     if precision is None or precision == 0:
-        return str(f)
+        return str(float(f))
 
     return ('%%.%uf' % precision) % f
 
@@ -150,7 +150,8 @@ class _FaaTppIapGeorefOutputInterface(abc.ABC):
                      xml.etree.ElementTree.Element[str]],
                  csv_file: typing.TextIO,
                  *,
-                 precision: int | None = None):
+                 precision: int | None = None,
+                 projection_precision: int | None = None):
         ...
 
     def __enter__(self) -> _FaaTppIapGeorefOutputInterface:
@@ -181,9 +182,11 @@ class _FaaTppIapGeorefCsvOutput(_FaaTppIapGeorefOutputInterface):
                      xml.etree.ElementTree.Element[str]],
                  csv_file: typing.TextIO,
                  *,
-                 precision: int | None = None):
+                 precision: int | None = None,
+                 projection_precision: int | None = None):
         self._csv_writer = csv.writer(csv_file, lineterminator='\n')
         self._precision = precision
+        self._projection_precision = projection_precision
 
     @typing.override
     def __enter__(self) -> _FaaTppIapGeorefCsvOutput:
@@ -215,7 +218,7 @@ class _FaaTppIapGeorefCsvOutput(_FaaTppIapGeorefOutputInterface):
         # Write this chart’s information to the CSV output.
         self._csv_writer.writerow((
             georef_info.pdf_name,
-            *(float(f) for f in (
+            *(_f_p(f, self._projection_precision) for f in (
                 georef_info.sp_lat_1,
                 georef_info.sp_lat_2,
                 *georef_info.origin,
@@ -244,7 +247,9 @@ def _xml_el(
 def _georeferencing_el(
         georef_info: faa_tpp_iap_georef_types.ChartGeorefInfo,
         *,
-        precision: int | None = None) -> xml.etree.ElementTree.Element:
+        precision: int | None = None,
+        projection_precision: int | None = None
+) -> xml.etree.ElementTree.Element:
     # This only has one caller, but it’s broken into its own function to reduce
     # the indentation at the point of use, making it more readable.
     return _xml_el(
@@ -256,25 +261,34 @@ def _georeferencing_el(
                         'version': 'WKT1_ESRI'
                     },
                     text=georef_info.crs_wkt),
-            _xml_el(
-                'projection',
-                attrib={
-                    'type': georef_info.crs_dict['proj'],
-                    'datum': georef_info.crs_dict['datum']
-                },
-                children=(
-                    _xml_el(
-                        'standard_parallel',
-                        attrib={'latitude': str(float(georef_info.sp_lat_1))}),
-                    _xml_el(
-                        'standard_parallel',
-                        attrib={'latitude': str(float(georef_info.sp_lat_2))}),
-                    _xml_el('origin',
-                            attrib={
-                                'latitude': str(float(georef_info.origin.lat)),
-                                'longitude': str(float(georef_info.origin.lon))
-                            }),
-                )),
+            _xml_el('projection',
+                    attrib={
+                        'type': georef_info.crs_dict['proj'],
+                        'datum': georef_info.crs_dict['datum']
+                    },
+                    children=(
+                        _xml_el('standard_parallel',
+                                attrib={
+                                    'latitude':
+                                        _f_p(georef_info.sp_lat_1,
+                                             projection_precision)
+                                }),
+                        _xml_el('standard_parallel',
+                                attrib={
+                                    'latitude':
+                                        _f_p(georef_info.sp_lat_2,
+                                             projection_precision)
+                                }),
+                        _xml_el('origin',
+                                attrib={
+                                    'latitude':
+                                        _f_p(georef_info.origin.lat,
+                                             projection_precision),
+                                    'longitude':
+                                        _f_p(georef_info.origin.lon,
+                                             projection_precision)
+                                }),
+                    )),
             _xml_el(
                 'control_points',
                 children=(_xml_el('control_point',
@@ -297,10 +311,12 @@ class _FaaTppIapGeorefXmlOutput(_FaaTppIapGeorefOutputInterface):
                      xml.etree.ElementTree.Element[str]],
                  xml_file: typing.TextIO,
                  *,
-                 precision: int | None = None):
+                 precision: int | None = None,
+                 projection_precision: int | None = None):
         self._metafile = metafile
         self._xml_file = xml_file
         self._precision = precision
+        self._projection_precision = projection_precision
 
     @typing.override
     def add_chart(
@@ -334,17 +350,16 @@ def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
     return pdf_name
 
 
-def faa_tpp_iap_georef(
-    tpp_dir: os.PathLike[str] | str,
-    georef_chart_f: typing.Callable[[os.PathLike[str] | str],
-                                    faa_tpp_iap_georef_types.ChartGeorefInfo |
-                                    None],
-    output_cls: type[_FaaTppIapGeorefOutputInterface],
-    output_file: typing.TextIO,
-    *,
-    precision: int | None = None,
-    parallel: int | None = 1,
-) -> None:
+def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
+                       georef_chart_f: typing.Callable[
+                           [os.PathLike[str] | str],
+                           faa_tpp_iap_georef_types.ChartGeorefInfo | None],
+                       output_cls: type[_FaaTppIapGeorefOutputInterface],
+                       output_file: typing.TextIO,
+                       *,
+                       precision: int | None = None,
+                       projection_precision: int | None = None,
+                       parallel: int | None = 1) -> None:
     metafile = xml.etree.ElementTree.parse(
         os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
     assert metafile.getroot().tag == 'digital_tpp'
@@ -364,7 +379,10 @@ def faa_tpp_iap_georef(
                     concurrent.futures.ProcessPoolExecutor)
     with (
             executor_cls(max_workers=parallel) as executor,
-            output_cls(metafile, output_file, precision=precision) as output,
+            output_cls(metafile,
+                       output_file,
+                       precision=precision,
+                       projection_precision=projection_precision) as output,
     ):
         for chart_el, georef_info in zip(
                 chart_els_gen_tee[1],
@@ -408,6 +426,11 @@ def main(args: typing.Sequence[str]) -> int | None:
         default=7,
         help='precision of derived geographic coordinates (default: 7)')
     parser.add_argument(
+        '--projection-precision',
+        type=int,
+        help=
+        'precision of extracted projection parameters (default: as extracted)')
+    parser.add_argument(
         'tpp_dir',
         help='directory containing d-TPP_Metafile.xml and chart PDFs')
     parser.add_argument('out_path',
@@ -437,6 +460,7 @@ def main(args: typing.Sequence[str]) -> int | None:
                            output_cls,
                            sys.stdout,
                            precision=parsed.precision,
+                           projection_precision=parsed.projection_precision,
                            parallel=parsed.parallel)
     else:
         with open(parsed.out_path, 'w', newline='\r\n') as out_file:
@@ -445,6 +469,7 @@ def main(args: typing.Sequence[str]) -> int | None:
                                output_cls,
                                out_file,
                                precision=parsed.precision,
+                               projection_precision=parsed.projection_precision,
                                parallel=parsed.parallel)
 
 
