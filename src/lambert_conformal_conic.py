@@ -94,11 +94,11 @@ class Angle:
             raise ValueError(unit)
 
     @property
-    def rad(self):
+    def rad(self) -> float:
         return self._rad
 
     @property
-    def deg(self):
+    def deg(self) -> float:
         return math.degrees(self._rad)
 
 
