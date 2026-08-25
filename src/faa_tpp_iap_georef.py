@@ -19,6 +19,7 @@
 import abc
 import argparse
 import concurrent.futures
+import contextlib
 import csv
 import itertools
 import os
@@ -27,6 +28,9 @@ import types
 import typing
 import warnings
 import xml.etree.ElementTree
+
+if typing.TYPE_CHECKING:
+    import _typeshed
 
 # rasterio is preferred, but not required.
 if typing.TYPE_CHECKING:
@@ -395,6 +399,32 @@ def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
             output.add_chart(chart_el, georef_info)
 
 
+@contextlib.contextmanager
+def _open_or_use(
+    path: os.PathLike[str] | str | int | None,
+    use: typing.TextIO,
+    mode: _typeshed.OpenTextMode = 'r',
+    buffering: int = -1,
+    encoding: str | None = None,
+    errors: str | None = None,
+    newline: str | None = None,
+    closefd: bool = True,
+    opener: typing.Callable[[str, int], int] | None = None
+) -> typing.Generator[typing.TextIO]:
+    if path is None:
+        yield use
+    else:
+        with open(path,
+                  mode,
+                  buffering=buffering,
+                  encoding=encoding,
+                  errors=errors,
+                  newline=newline,
+                  closefd=closefd,
+                  opener=opener) as file:
+            yield file
+
+
 def main(args: typing.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser(
         description=
@@ -454,23 +484,15 @@ def main(args: typing.Sequence[str]) -> int | None:
         'csv': _FaaTppIapGeorefCsvOutput,
     }[parsed.format]
 
-    if parsed.out_path is None:
+    with _open_or_use(parsed.out_path, sys.stdout, 'w',
+                      newline='\r\n') as out_file:
         faa_tpp_iap_georef(parsed.tpp_dir,
                            georef_chart_f,
                            output_cls,
-                           sys.stdout,
+                           out_file,
                            precision=parsed.precision,
                            projection_precision=parsed.projection_precision,
                            parallel=parsed.parallel)
-    else:
-        with open(parsed.out_path, 'w', newline='\r\n') as out_file:
-            faa_tpp_iap_georef(parsed.tpp_dir,
-                               georef_chart_f,
-                               output_cls,
-                               out_file,
-                               precision=parsed.precision,
-                               projection_precision=parsed.projection_precision,
-                               parallel=parsed.parallel)
 
 
 if __name__ == '__main__':
