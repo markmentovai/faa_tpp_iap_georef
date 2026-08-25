@@ -23,6 +23,7 @@ import statistics
 import typing
 import warnings
 
+# At least one of pikepdf and pypdf are required.
 if typing.TYPE_CHECKING:
     import pikepdf
     import pypdf
@@ -34,16 +35,41 @@ else:
         import pikepdf
         _pdf_modules_l.append('pikepdf')
     except ImportError:
+
         import pypdf
         import pypdf.generic
         _pdf_modules_l.append('pypdf')
+
+        # A fallback type definition of pikepdf.Array so that it can be used in
+        # `isinstance` assertions without triggering NameError.
+        class pikepdf:
+
+            class Array:
+                ...
+
+            ...
     else:
         try:
             import pypdf
             import pypdf.generic
             _pdf_modules_l.append('pypdf')
         except ImportError:
-            pass
+
+            # A fallback type definition of pypdf.generic.ArrayObject so that it
+            # can be used in `isinstance` assertions without triggering
+            # NameError.
+            class pypdf:
+
+                class generic:
+
+                    class ArrayObject:
+                        ...
+
+                    ...
+
+                ...
+
+
 PDF_MODULES = tuple(_pdf_modules_l)
 del _pdf_modules_l
 

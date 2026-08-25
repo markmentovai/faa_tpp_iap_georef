@@ -28,6 +28,7 @@ import typing
 import warnings
 import xml.etree.ElementTree
 
+# rasterio is preferred, but not required.
 if typing.TYPE_CHECKING:
     import rasterio
     import rasterio.errors
