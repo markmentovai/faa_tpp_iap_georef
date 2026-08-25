@@ -19,7 +19,6 @@ import itertools
 import math
 import os
 import re
-import statistics
 import typing
 import warnings
 
@@ -305,17 +304,13 @@ def _georef_chart_page(
                              gpt_en_tr_n - gpt_en_tl_n,
                              rel_tol=1e-7))):
             rot0_rad = math.atan2(
-                statistics.fmean(
-                    (gpt_en_tl_e - gpt_en_bl_e, gpt_en_tr_e - gpt_en_br_e)),
-                statistics.fmean(
-                    (gpt_en_tl_n - gpt_en_bl_n, gpt_en_tr_n - gpt_en_br_n)))
+                ((gpt_en_tl_e - gpt_en_bl_e) + (gpt_en_tr_e - gpt_en_br_e)) / 2,
+                ((gpt_en_tl_n - gpt_en_bl_n) + (gpt_en_tr_n - gpt_en_br_n)) / 2)
             rot1_rad = math.atan2(
-                statistics.fmean(
-                    (gpt_en_br_n - gpt_en_bl_n, gpt_en_tr_n - gpt_en_tl_n)),
-                statistics.fmean(
-                    (gpt_en_tr_e - gpt_en_tl_e, gpt_en_br_e - gpt_en_bl_e)))
+                ((gpt_en_br_n - gpt_en_bl_n) + (gpt_en_tr_n - gpt_en_tl_n)) / 2,
+                ((gpt_en_tr_e - gpt_en_tl_e) + (gpt_en_br_e - gpt_en_bl_e)) / 2)
             assert math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7)
-            rot_rad = statistics.fmean((rot0_rad, -rot1_rad))
+            rot_rad = (rot0_rad - rot1_rad) / 2
 
             warnings.warn('PDF chart %s is rotated by %f°' %
                           (pdf_path, math.degrees(rot_rad)))
@@ -333,10 +328,12 @@ def _georef_chart_page(
         )
 
     # Easting/northing for the GPTS coordinates, arranged as a rectangle.
-    gpts_en = Rect.from_lbrt(statistics.fmean((gpt_en_bl_e, gpt_en_tl_e)),
-                             statistics.fmean((gpt_en_bl_n, gpt_en_br_n)),
-                             statistics.fmean((gpt_en_br_e, gpt_en_tr_e)),
-                             statistics.fmean((gpt_en_tl_n, gpt_en_tr_n)))
+    gpts_en = Rect.from_lbrt(
+        (gpt_en_bl_e + gpt_en_tl_e) / 2,
+        (gpt_en_bl_n + gpt_en_br_n) / 2,
+        (gpt_en_br_e + gpt_en_tr_e) / 2,
+        (gpt_en_tl_n + gpt_en_tr_n) / 2,
+    )
 
     # LPTS are unit square coordinates (range 0–1) relative to the viewport
     # BBox. In practice, TPP PDFs always use [0.1 0.1 0.9 0.1 0.9 0.9 0.1 0.9],
