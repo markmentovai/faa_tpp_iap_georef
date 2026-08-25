@@ -76,7 +76,7 @@ import faa_tpp_iap_georef_types
 import lambert_conformal_conic
 
 
-class Rect:
+class _Rect:
     __slots__ = ('_x', '_y', '_w', '_h')
 
     def __init__(self, x: float, y: float, w: float, h: float):
@@ -86,17 +86,17 @@ class Rect:
         self._h = h
 
     @classmethod
-    def from_xywh(cls, x: float, y: float, w: float, h: float) -> Rect:
+    def from_xywh(cls, x: float, y: float, w: float, h: float) -> _Rect:
         return cls(x, y, w, h)
 
     @classmethod
-    def from_lbrt(cls, l: float, b: float, r: float, t: float) -> Rect:
+    def from_lbrt(cls, l: float, b: float, r: float, t: float) -> _Rect:
         return cls(l, b, r - l, t - b)
 
     @classmethod
     def from_pdf_box_array(
             cls,
-            pdf_box_array: pikepdf.Array | pypdf.generic.ArrayObject) -> Rect:
+            pdf_box_array: pikepdf.Array | pypdf.generic.ArrayObject) -> _Rect:
         l, b, r, t = pdf_box_array
         assert isinstance(l, (decimal.Decimal, float, int))
         assert isinstance(b, (decimal.Decimal, float, int))
@@ -107,7 +107,7 @@ class Rect:
     @classmethod
     def from_pdf_box_array_obj(
             cls, pdf_box_array_obj: pikepdf.Object | pypdf.generic.PdfObject
-    ) -> Rect:
+    ) -> _Rect:
         assert isinstance(pdf_box_array_obj,
                           (pikepdf.Array, pypdf.generic.ArrayObject))
         return cls.from_pdf_box_array(pdf_box_array_obj)
@@ -115,7 +115,7 @@ class Rect:
     @classmethod
     def from_pdf_polygon_array(
             cls,
-            pdf_cor_array: pikepdf.Array | pypdf.generic.ArrayObject) -> Rect:
+            pdf_cor_array: pikepdf.Array | pypdf.generic.ArrayObject) -> _Rect:
         if len(pdf_cor_array) == 10:
             blx, bly, brx, bry, trx, tr_y, tlx, tly, blx2, bly2 = pdf_cor_array
             assert blx2 == blx
@@ -139,7 +139,7 @@ class Rect:
     @classmethod
     def from_pdf_polygon_array_obj(
             cls, pdf_cor_array_obj: pikepdf.Object | pypdf.generic.PdfObject
-    ) -> Rect:
+    ) -> _Rect:
         assert isinstance(pdf_cor_array_obj,
                           (pikepdf.Array, pypdf.generic.ArrayObject))
         return cls.from_pdf_polygon_array(pdf_cor_array_obj)
@@ -181,10 +181,10 @@ class Rect:
 
 
 def _transform_en_from_to_rect(
-    en_rect: Rect,
-    from_rect: Rect,
-    to_rect: Rect,
-) -> Rect:
+    en_rect: _Rect,
+    from_rect: _Rect,
+    to_rect: _Rect,
+) -> _Rect:
     # Transforms the “en” (easting/northing) coordinates in `en_rect` that
     # correspond to x/y coordinates in `from_rect` to be the easting/northing
     # values corresponding the x/y coordinates in `to_rect`.
@@ -192,7 +192,7 @@ def _transform_en_from_to_rect(
     # This can be used to “expand” easting/northing coordinates from a smaller
     # rectangle within a page to a larger one, such as converting from LPTS to a
     # viewport BBox, or from a viewport BBox to the page’s MediaBox/CropBox.
-    return Rect.from_lbrt(
+    return _Rect.from_lbrt(
         en_rect.l + en_rect.w * ((to_rect.l - from_rect.l) / from_rect.w),
         en_rect.b + en_rect.h * ((to_rect.b - from_rect.b) / from_rect.h),
         en_rect.r + en_rect.w * ((to_rect.r - from_rect.r) / from_rect.w),
@@ -251,12 +251,14 @@ def _georef_chart_page(
         projection_unit,
     ) = (float(x) for x in match.groups())
 
+    assert ellipsoid_a == 6378137.0
+    assert ellipsoid_inv_f == 298.2572221
     assert math.degrees(angle_unit) == 1.0
     assert lambert_false_easting == 0.0
     assert lambert_false_northing == 0.0
 
-    # These inches are based on the US survey foot, 39.37 per meter. The PDF
-    # only gives 13 digits beyond the decimal point.
+    # These inches are based on the US survey foot, 39.37 survey inches per
+    # meter. TPP PDFs only give 13 digits beyond the decimal point.
     assert math.isclose(projection_unit, 1 / 39.37, rel_tol=1e-13)
 
     lambert = lambert_conformal_conic.LambertConformalConic(
@@ -269,6 +271,8 @@ def _georef_chart_page(
         lambert_false_northing,
     )
 
+    # GPTS geographic coordinates, parallel to the LPTS Cartesian coordinates
+    # extracted later. TPP PDFs have 4 coordinate pairs in GPTS.
     gpts = measure['/GPTS']
     assert isinstance(gpts, (pikepdf.Array, pypdf.generic.ArrayObject))
     gpt_ll_bl, gpt_ll_br, gpt_ll_tr, gpt_ll_tl = tuple(
@@ -328,7 +332,7 @@ def _georef_chart_page(
         )
 
     # Easting/northing for the GPTS coordinates, arranged as a rectangle.
-    gpts_en = Rect.from_lbrt(
+    gpts_en = _Rect.from_lbrt(
         (gpt_en_bl_e + gpt_en_tl_e) / 2,
         (gpt_en_bl_n + gpt_en_br_n) / 2,
         (gpt_en_br_e + gpt_en_tr_e) / 2,
@@ -337,18 +341,19 @@ def _georef_chart_page(
 
     # LPTS are unit square coordinates (range 0–1) relative to the viewport
     # BBox. In practice, TPP PDFs always use [0.1 0.1 0.9 0.1 0.9 0.9 0.1 0.9],
-    # covering .8 of the width and .8 of the height of the viewport BBox.
-    lpts = Rect.from_pdf_polygon_array_obj(measure['/LPTS'])
+    # covering .8 of the width and .8 of the height of the viewport BBox. These
+    # correspond 1:1 with the geographic GPTS and the easting/northing gpts_en.
+    lpts = _Rect.from_pdf_polygon_array_obj(measure['/LPTS'])
     assert lpts.l <= lpts.r
     assert lpts.b <= lpts.t
 
     # “Expand” to get easting/northing at the corners of the viewport BBox.
     viewport_bbox_en = _transform_en_from_to_rect(
-        gpts_en, lpts, Rect.from_lbrt(0.0, 0.0, 1.0, 1.0))
+        gpts_en, lpts, _Rect.from_lbrt(0.0, 0.0, 1.0, 1.0))
 
     # The viewport BBox is in page coordinates (1/72″). In practice, TPP PDFs
     # all have a viewport BBox of [9.18 2.628 378.18 591.372].
-    viewport_bbox = Rect.from_pdf_box_array_obj(viewport['/BBox'])
+    viewport_bbox = _Rect.from_pdf_box_array_obj(viewport['/BBox'])
 
     # The x-axis and y-axis scales should be identical. The tolerance value was
     # chosen empirically.
@@ -372,7 +377,7 @@ def _georef_chart_page(
     # match that. Thse are in page coordinates (1/72″). In practice, in TPP
     # PDFs, both MediaBox and CropBox are supplied and are identical: [0 0
     # 387.36 594], for page dimensions of 5.38″×8.25″.
-    page_box = Rect.from_pdf_box_array_obj(page['/MediaBox'])
+    page_box = _Rect.from_pdf_box_array_obj(page['/MediaBox'])
 
     # “Expand” to get easting/northing at the page corners.
     page_en = _transform_en_from_to_rect(viewport_bbox_en, viewport_bbox,
