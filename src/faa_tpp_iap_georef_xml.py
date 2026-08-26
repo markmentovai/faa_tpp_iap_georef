@@ -187,6 +187,10 @@ def faa_tpp_iap_georef_xml(in_path: os.PathLike[str] | str,
                    xml_declaration=True,
                    short_empty_elements=False)
 
+    # xml.etree.ElementTree.ElementTree.write doesn’t conclude its output with a
+    # trailing newline, even when producing multi-line output as it does here.
+    xml_out_file.write('\n')
+
 
 def main(args: typing.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()

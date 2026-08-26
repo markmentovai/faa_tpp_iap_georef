@@ -363,6 +363,11 @@ class _FaaTppIapGeorefXmlOutput(_FaaTppIapGeorefOutputInterface):
                              xml_declaration=True,
                              short_empty_elements=False)
 
+        # xml.etree.ElementTree.ElementTree.write doesn’t conclude its output
+        # with a trailing newline, even when producing multi-line output as it
+        # does here.
+        self._xml_out_file.write('\n')
+
 
 def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
     pdf_name_el, = chart_el.iterfind('./pdf_name')
