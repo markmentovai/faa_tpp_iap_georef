@@ -138,6 +138,13 @@ def faa_tpp_iap_georef_chart_rasterio(
             return None
 
 
+# precision = None or 0 gives the full precision as stored. Positive precision
+# > 0 values give the number of digits beyond the decimal point. Negative
+# precision < 0 values give the number of decimal digits, which may be on either
+# side of the decimal point, and may cross the decimal point. To match
+# rasterio/GDAL for projection parameters, use -15 (probably originating in
+# PROJ).
+#
 # precision = 7 gives .00036″ resolution (better than dd°mm′ss.sss″). This is
 # ≤1.1cm on either axis.
 #
@@ -149,6 +156,9 @@ def _f_p(f: float, precision: int | None) -> str:
 
     if precision is None or precision == 0:
         return str(f)
+
+    if precision < 0:
+        return f'{f:.{-precision}}'
 
     return f'{f:.{precision}f}'
 
