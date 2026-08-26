@@ -200,8 +200,6 @@ def main(args: typing.Sequence[str]) -> int | None:
         with open(parsed.xml_out_path, 'w', newline='\r\n') as xml_out_file:
             faa_tpp_iap_georef_xml(parsed.in_path, xml_out_file)
 
-    return None
-
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))

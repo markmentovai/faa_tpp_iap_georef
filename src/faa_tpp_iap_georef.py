@@ -567,7 +567,7 @@ def main(args: typing.Sequence[str]) -> int | None:
         rv = faa_tpp_iap_georef(
             parsed.in_path,
             georef_chart_f,
-            output_cls,  # type: ignore[type-abstract]  # (mypy)
+            output_cls,
             out_file,
             precision=parsed.precision,
             projection_precision=parsed.projection_precision,

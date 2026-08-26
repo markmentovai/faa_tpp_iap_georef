@@ -151,7 +151,7 @@ class LambertConformalConic:
         t2 = self._calc_t(sp_lat_2.rad)  # t₂
         self._n = (
             (math.log(m1) - math.log(m2)) / (math.log(t1) - math.log(t2)))  # n
-        self._f = m1 / typing.cast(float, self._n * t1**self._n)  # F
+        self._f = m1 / (self._n * t1**self._n)  # F
         self._rf = self._calc_r(fo_lat.rad)  # rꜰ
 
     def __repr__(self) -> str:
@@ -211,16 +211,14 @@ class LambertConformalConic:
                 math.sqrt(1 - self._ellipsoid.e2 * math.sin(phi_rad)**2))
 
     def _calc_t(self, phi_rad: float) -> float:
-        return typing.cast(
-            float,
-            math.tan(math.pi / 4 - phi_rad / 2) /
-            ((1 - self._ellipsoid.e * math.sin(phi_rad)) /
-             (1 + self._ellipsoid.e * math.sin(phi_rad)))
-            **(self._ellipsoid.e / 2))
+        return (math.tan(math.pi / 4 - phi_rad / 2) /
+                ((1 - self._ellipsoid.e * math.sin(phi_rad)) /
+                 (1 + self._ellipsoid.e * math.sin(phi_rad)))
+                **(self._ellipsoid.e / 2))
 
     def _calc_r(self, phi_rad: float) -> float:
         t = self._calc_t(phi_rad)
-        return self._ellipsoid.a * typing.cast(float, self._f * t**self._n)
+        return self._ellipsoid.a * self._f * t**self._n
 
     def forward(
             self,

@@ -153,8 +153,6 @@ def main(args: typing.Sequence[str]) -> int | None:
         with open(parsed.csv_out_path, 'w', newline='\r\n') as csv_out_file:
             faa_tpp_iap_georef_csv(parsed.in_path, csv_out_file)
 
-    return None
-
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv[1:]))
