@@ -45,13 +45,19 @@ class DataError(Exception):
             raise cls(f'{a} != {b}')
 
 
-def faa_tpp_iap_georef_csv(tpp_dir: os.PathLike[str] | str,
-                           csv_file: typing.TextIO) -> None:
-    metafile = xml.etree.ElementTree.parse(
-        os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
+def faa_tpp_iap_georef_csv(in_path: os.PathLike[str] | str,
+                           csv_out_file: typing.TextIO) -> None:
+    try:
+        tpp_dir = in_path
+        metafile = xml.etree.ElementTree.parse(
+            os.path.join(in_path, 'd-TPP_Metafile.xml'))
+    except NotADirectoryError, FileNotFoundError:
+        tpp_dir = os.path.dirname(in_path)
+        metafile = xml.etree.ElementTree.parse(in_path)
+
     DataError.raise_if_ne(metafile.getroot().tag, 'digital_tpp')
 
-    csv_writer = csv.writer(csv_file, lineterminator='\n')
+    csv_writer = csv.writer(csv_out_file, lineterminator='\n')
 
     # Write the CSV header.
     csv_writer.writerow((
@@ -137,15 +143,15 @@ def faa_tpp_iap_georef_csv(tpp_dir: os.PathLike[str] | str,
 
 def main(args: typing.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('tpp_dir')
-    parser.add_argument('csv_path', nargs='?')
+    parser.add_argument('in_path')
+    parser.add_argument('csv_out_path', nargs='?')
     parsed = parser.parse_args(args)
 
-    if parsed.csv_path is None:
-        faa_tpp_iap_georef_csv(parsed.tpp_dir, sys.stdout)
+    if parsed.csv_out_path is None:
+        faa_tpp_iap_georef_csv(parsed.in_path, sys.stdout)
     else:
-        with open(parsed.csv_path, 'w', newline='\r\n') as csv_file:
-            faa_tpp_iap_georef_csv(parsed.tpp_dir, csv_file)
+        with open(parsed.csv_out_path, 'w', newline='\r\n') as csv_out_file:
+            faa_tpp_iap_georef_csv(parsed.in_path, csv_out_file)
 
     return None
 

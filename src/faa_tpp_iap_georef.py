@@ -169,7 +169,7 @@ class _FaaTppIapGeorefOutputInterface(abc.ABC):
     def __init__(self,
                  metafile: xml.etree.ElementTree.ElementTree[
                      xml.etree.ElementTree.Element[str]],
-                 csv_file: typing.TextIO,
+                 out_file: typing.TextIO,
                  *,
                  precision: int | None = None,
                  projection_precision: int | None = None):
@@ -201,11 +201,11 @@ class _FaaTppIapGeorefCsvOutput(_FaaTppIapGeorefOutputInterface):
     def __init__(self,
                  metafile: xml.etree.ElementTree.ElementTree[
                      xml.etree.ElementTree.Element[str]],
-                 csv_file: typing.TextIO,
+                 out_file: typing.TextIO,
                  *,
                  precision: int | None = None,
                  projection_precision: int | None = None):
-        self._csv_writer = csv.writer(csv_file, lineterminator='\n')
+        self._csv_writer = csv.writer(out_file, lineterminator='\n')
         self._precision = precision
         self._projection_precision = projection_precision
 
@@ -325,17 +325,17 @@ def _georeferencing_el(
 
 
 class _FaaTppIapGeorefXmlOutput(_FaaTppIapGeorefOutputInterface):
-    __slots__ = ('_metafile', '_xml_file', '_precision')
+    __slots__ = ('_metafile', '_xml_out_file', '_precision')
 
     def __init__(self,
                  metafile: xml.etree.ElementTree.ElementTree[
                      xml.etree.ElementTree.Element[str]],
-                 xml_file: typing.TextIO,
+                 out_file: typing.TextIO,
                  *,
                  precision: int | None = None,
                  projection_precision: int | None = None):
         self._metafile = metafile
-        self._xml_file = xml_file
+        self._xml_out_file = out_file
         self._precision = precision
         self._projection_precision = projection_precision
 
@@ -358,7 +358,7 @@ class _FaaTppIapGeorefXmlOutput(_FaaTppIapGeorefOutputInterface):
     ) -> None:
         # Write the XML output.
         xml.etree.ElementTree.indent(self._metafile)
-        self._metafile.write(self._xml_file,
+        self._metafile.write(self._xml_out_file,
                              encoding='unicode',
                              xml_declaration=True,
                              short_empty_elements=False)
@@ -371,18 +371,73 @@ def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
     return pdf_name
 
 
-def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
+def faa_tpp_iap_georef(in_path: os.PathLike[str] | str,
                        georef_chart_f: typing.Callable[
                            [os.PathLike[str] | str],
                            faa_tpp_iap_georef_types.ChartGeorefInfo | None],
                        output_cls: type[_FaaTppIapGeorefOutputInterface],
-                       output_file: typing.TextIO,
+                       out_file: typing.TextIO,
                        *,
                        precision: int | None = None,
                        projection_precision: int | None = None,
-                       parallel: int | None = 1) -> None:
-    metafile = xml.etree.ElementTree.parse(
-        os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
+                       parallel: int | None = 1) -> int | None:
+    try:
+        tpp_dir = in_path
+        metafile_path = os.path.join(tpp_dir, 'd-TPP_Metafile.xml')
+        metafile = xml.etree.ElementTree.parse(metafile_path)
+    except NotADirectoryError, FileNotFoundError:
+        try:
+            metafile_path = in_path
+            tpp_dir = os.path.dirname(in_path)
+            metafile = xml.etree.ElementTree.parse(metafile_path)
+        except xml.etree.ElementTree.ParseError:
+            metafile_path = None
+            tpp_dir = None
+            pdf_path = in_path
+            pdf_name = os.path.basename(pdf_path)
+
+            # Try to open in_path as a single PDF file.
+            #
+            # There can only be one chart to process in this mode, so there’s no
+            # point in performing parallel operation.
+            georef_info = georef_chart_f(pdf_path)
+
+            # Create a skeletal XML structure in case it’s necessary (for XML
+            # output). This is fake, but it’s good enough to be consumed by this
+            # program as input again later.
+            record_el = _xml_el('record',
+                                children=(
+                                    _xml_el('chart_code', text='IAP'),
+                                    _xml_el('pdf_name', text=pdf_name),
+                                    _xml_el('useraction'),
+                                ))
+            metafile: (xml.etree.ElementTree.ElementTree[
+                xml.etree.ElementTree.Element[str]]
+                      ) = xml.etree.ElementTree.ElementTree(
+                          _xml_el('digital_tpp',
+                                  children=(_xml_el(
+                                      'state_code',
+                                      children=(_xml_el(
+                                          'city_name',
+                                          children=(_xml_el(
+                                              'airport_name',
+                                              children=(record_el,)),)),)),)))
+
+            with output_cls(
+                    metafile,
+                    out_file,
+                    precision=precision,
+                    projection_precision=projection_precision) as output:
+                if georef_info is None:
+                    # This is worth a warning and a non-succesful exit in
+                    # single-chart mode.
+                    warnings.warn(f'PDF chart {pdf_path} is not georeferenced')
+                    return 1
+
+                output.add_chart(record_el, georef_info)
+
+            return
+
     faa_tpp_iap_georef_types.DataError.raise_if_ne(metafile.getroot().tag,
                                                    'digital_tpp')
 
@@ -402,7 +457,7 @@ def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
     with (
             executor_cls(max_workers=parallel) as executor,
             output_cls(metafile,
-                       output_file,
+                       out_file,
                        precision=precision,
                        projection_precision=projection_precision) as output,
     ):
@@ -482,8 +537,10 @@ def main(args: typing.Sequence[str]) -> int | None:
         help=
         'precision of extracted projection parameters (default: as extracted)')
     parser.add_argument(
-        'tpp_dir',
-        help='directory containing d-TPP_Metafile.xml and chart PDFs')
+        'in_path',
+        help=('directory containing d-TPP_Metafile.xml and chart PDFs; '
+              'd-TPP_Metafile.xml in such a directory; or '
+              'single IAP chart PDF'))
     parser.add_argument('out_path',
                         nargs='?',
                         help='output file to write (default: stdout)')
@@ -507,8 +564,8 @@ def main(args: typing.Sequence[str]) -> int | None:
 
     with _open_or_use(parsed.out_path, sys.stdout, 'w',
                       newline='\r\n') as out_file:
-        faa_tpp_iap_georef(
-            parsed.tpp_dir,
+        rv = faa_tpp_iap_georef(
+            parsed.in_path,
             georef_chart_f,
             output_cls,  # type: ignore[type-abstract]  # (mypy)
             out_file,
@@ -516,7 +573,7 @@ def main(args: typing.Sequence[str]) -> int | None:
             projection_precision=parsed.projection_precision,
             parallel=parsed.parallel)
 
-    return None
+    return rv
 
 
 if __name__ == '__main__':

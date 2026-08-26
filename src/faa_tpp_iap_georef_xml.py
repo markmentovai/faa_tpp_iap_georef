@@ -112,10 +112,16 @@ def _georeferencing_el(
         ))
 
 
-def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
-                           xml_write_file: typing.TextIO) -> None:
-    metafile = xml.etree.ElementTree.parse(
-        os.path.join(tpp_dir, 'd-TPP_Metafile.xml'))
+def faa_tpp_iap_georef_xml(in_path: os.PathLike[str] | str,
+                           xml_out_file: typing.TextIO) -> None:
+    try:
+        tpp_dir = in_path
+        metafile = xml.etree.ElementTree.parse(
+            os.path.join(in_path, 'd-TPP_Metafile.xml'))
+    except NotADirectoryError, FileNotFoundError:
+        tpp_dir = os.path.dirname(in_path)
+        metafile = xml.etree.ElementTree.parse(in_path)
+
     DataError.raise_if_ne(metafile.getroot().tag, 'digital_tpp')
 
     # Scan d-TPP_Metafile.xml for charts. Only look at IAPs, and don’t look at
@@ -176,7 +182,7 @@ def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
 
     # Write the XML output.
     xml.etree.ElementTree.indent(metafile)
-    metafile.write(xml_write_file,
+    metafile.write(xml_out_file,
                    encoding='unicode',
                    xml_declaration=True,
                    short_empty_elements=False)
@@ -184,15 +190,15 @@ def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
 
 def main(args: typing.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('tpp_dir')
-    parser.add_argument('xml_path', nargs='?')
+    parser.add_argument('in_path')
+    parser.add_argument('xml_out_path', nargs='?')
     parsed = parser.parse_args(args)
 
-    if parsed.xml_path is None:
-        faa_tpp_iap_georef_xml(parsed.tpp_dir, sys.stdout)
+    if parsed.xml_out_path is None:
+        faa_tpp_iap_georef_xml(parsed.in_path, sys.stdout)
     else:
-        with open(parsed.xml_path, 'w', newline='\r\n') as xml_write_file:
-            faa_tpp_iap_georef_xml(parsed.tpp_dir, xml_write_file)
+        with open(parsed.xml_out_path, 'w', newline='\r\n') as xml_out_file:
+            faa_tpp_iap_georef_xml(parsed.in_path, xml_out_file)
 
     return None
 
