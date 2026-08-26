@@ -411,6 +411,11 @@ def faa_tpp_iap_georef(tpp_dir: os.PathLike[str] | str,
                 executor.map(georef_chart_f, (os.path.join(tpp_dir, pdf_name)
                                               for pdf_name in pdf_names_gen),
                              chunksize=16)):
+
+            # Remove stale georeferencing elements.
+            for old_georeferencing_el in chart_el.iterfind('georeferencing'):
+                chart_el.remove(old_georeferencing_el)
+
             if georef_info is None:
                 continue
 

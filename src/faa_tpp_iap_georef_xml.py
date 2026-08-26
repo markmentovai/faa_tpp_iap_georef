@@ -127,6 +127,10 @@ def faa_tpp_iap_georef_xml(tpp_dir: os.PathLike[str] | str,
         pdf_name = pdf_name_el.text
         assert isinstance(pdf_name, str)
 
+        # Remove stale georeferencing elements.
+        for old_georeferencing_el in chart_el.iterfind('georeferencing'):
+            chart_el.remove(old_georeferencing_el)
+
         with warnings.catch_warnings(), rasterio.Env(GDAL_PDF_DPI=300):
             # Allow non-georeferenced plates to be skipped.
             warnings.simplefilter('error',
