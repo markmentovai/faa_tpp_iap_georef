@@ -57,6 +57,9 @@ class Ellipsoid:
         self._e2 = 2 * self._f - self._f**2  # e²
         self._e = math.sqrt(self._e2)  # e
 
+    def __repr__(self) -> str:
+        return (f'{self.__class__.__name__}({self._a}, b={self._b})')
+
     @property
     def a(self) -> float:
         return self._a
@@ -95,6 +98,9 @@ class Angle:
         else:
             assert unit == 'deg'
             self._rad = math.radians(value)
+
+    def __repr__(self) -> str:
+        return (f"{self.__class__.__name__}({self._rad}, 'rad')")
 
     @property
     def rad(self) -> float:
@@ -147,6 +153,18 @@ class LambertConformalConic:
             (math.log(m1) - math.log(m2)) / (math.log(t1) - math.log(t2)))  # n
         self._f = m1 / typing.cast(float, self._n * t1**self._n)  # F
         self._rf = self._calc_r(fo_lat.rad)  # rꜰ
+
+    def __repr__(self) -> str:
+        return (self.__class__.__name__ + '(' + ', '.join(
+            str(x) for x in (
+                self._ellipsoid,
+                self._fo_lat,
+                self._fo_lon,
+                self._sp_lat_1,
+                self._sp_lat_2,
+                self._false_easting,
+                self._false_northing,
+            )) + ')')
 
     @property
     def ellipsoid(self) -> Ellipsoid:

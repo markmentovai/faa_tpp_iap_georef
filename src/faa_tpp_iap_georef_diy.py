@@ -145,7 +145,8 @@ class _Rect:
         return cls.from_pdf_polygon_array(pdf_cor_array_obj)
 
     def __repr__(self) -> str:
-        return 'Rect(%s, %s, %s, %s)' % (self._x, self._y, self._w, self._h)
+        return (self.__class__.__name__ + '(' + ', '.join(
+            str(x) for x in (self._x, self._y, self._w, self._h)) + ')')
 
     @property
     def x(self) -> float:
@@ -320,8 +321,8 @@ def _georef_chart_page(
                 math.isclose(rot0_rad, -rot1_rad, rel_tol=1e-7))
             rot_rad = (rot0_rad - rot1_rad) / 2
 
-            warnings.warn('PDF chart %s is rotated by %f°' %
-                          (pdf_path, math.degrees(rot_rad)))
+            warnings.warn(
+                f'PDF chart {pdf_path} is rotated by {math.degrees(rot_rad)}°')
 
             return None
 

@@ -37,12 +37,12 @@ class DataError(Exception):
     @classmethod
     def raise_if_false(cls, value: typing.Any) -> None:
         if not value:
-            raise cls('not %r' % value)
+            raise cls(f'not {value}')
 
     @classmethod
     def raise_if_ne(cls, a: typing.Any, b: typing.Any) -> None:
         if a != b:
-            raise cls('%r != %r' % (a, b))
+            raise cls(f'{a} != {b}')
 
 
 def faa_tpp_iap_georef_csv(tpp_dir: os.PathLike[str] | str,
@@ -124,7 +124,7 @@ def faa_tpp_iap_georef_csv(tpp_dir: os.PathLike[str] | str,
                             'lat_0',
                             'lon_0',
                         )),
-                        *('%.7f' % f for f in (
+                        *(f'{f:.7f}' for f in (
                             *ll_tl,
                             *ll_bl,
                             *ll_tr,

@@ -39,14 +39,14 @@ class DataError(Exception):
     @classmethod
     def raise_if_false(cls, value: typing.Any) -> None:
         if not value:
-            raise cls('not %r' % value)
+            raise cls(f'not {value}')
 
     @classmethod
     def raise_if_ne(cls, a: typing.Any, b: typing.Any) -> None:
         if a != b:
-            raise cls('%r != %r' % (a, b))
+            raise cls(f'{a} != {b}')
 
     @classmethod
     def raise_if_gt(cls, a: typing.Any, b: typing.Any) -> None:
         if a > b:
-            raise cls('%r > %r' % (a, b))
+            raise cls(f'{a} > {b}')
