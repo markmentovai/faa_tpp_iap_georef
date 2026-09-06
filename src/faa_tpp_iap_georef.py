@@ -18,6 +18,7 @@
 
 import abc
 import argparse
+import collections.abc
 import concurrent.futures
 import contextlib
 import csv
@@ -62,7 +63,7 @@ class _ImmediateExecutor(concurrent.futures.Executor):
     @typing.override
     def submit(
         self,
-        fn: typing.Callable[_P, _T],
+        fn: collections.abc.Callable[_P, _T],
         /,
         *args: _P.args,
         **kwargs: _P.kwargs,
@@ -257,7 +258,7 @@ def _xml_el(
     tag: str,
     attrib: dict[str, str] = {},
     text: str | None = None,
-    children: typing.Iterable[xml.etree.ElementTree.Element] = ()
+    children: collections.abc.Iterable[xml.etree.ElementTree.Element] = ()
 ) -> xml.etree.ElementTree.Element:
     el = xml.etree.ElementTree.Element(tag, attrib=attrib)
     el.text = text
@@ -377,7 +378,7 @@ def _chart_el_to_pdf_name(chart_el: xml.etree.ElementTree.Element[str]) -> str:
 
 
 def faa_tpp_iap_georef(in_path: os.PathLike[str] | str,
-                       georef_chart_f: typing.Callable[
+                       georef_chart_f: collections.abc.Callable[
                            [os.PathLike[str] | str],
                            faa_tpp_iap_georef_types.ChartGeorefInfo | None],
                        output_cls: type[_FaaTppIapGeorefOutputInterface],
@@ -492,8 +493,8 @@ def _open_or_use(
     errors: str | None = None,
     newline: str | None = None,
     closefd: bool = True,
-    opener: typing.Callable[[str, int], int] | None = None
-) -> typing.Generator[typing.TextIO]:
+    opener: collections.abc.Callable[[str, int], int] | None = None
+) -> collections.abc.Generator[typing.TextIO]:
     if path is None:
         yield use
     else:
@@ -508,7 +509,7 @@ def _open_or_use(
             yield file
 
 
-def main(args: typing.Sequence[str]) -> int | None:
+def main(args: collections.abc.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser(
         description=
         'Extract georeferencing metadata from FAA TPP IAP PDF charts.')

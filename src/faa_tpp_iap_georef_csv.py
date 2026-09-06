@@ -20,6 +20,7 @@
 # It is limited to CSV output.
 
 import argparse
+import collections.abc
 import csv
 import typing
 import os
@@ -141,7 +142,7 @@ def faa_tpp_iap_georef_csv(in_path: os.PathLike[str] | str,
                 pass
 
 
-def main(args: typing.Sequence[str]) -> int | None:
+def main(args: collections.abc.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path')
     parser.add_argument('csv_out_path', nargs='?')

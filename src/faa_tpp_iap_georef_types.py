@@ -16,6 +16,7 @@
 
 # pyright: strict
 
+import collections.abc
 import typing
 
 
@@ -26,12 +27,12 @@ class LatLon(typing.NamedTuple):
 
 class ChartGeorefInfo(typing.NamedTuple):
     pdf_name: str
-    crs_dict: typing.Mapping[str, typing.Any]
+    crs_dict: collections.abc.Mapping[str, typing.Any]
     crs_wkt: str
     sp_lat_1: float
     sp_lat_2: float
     origin: LatLon
-    control_points: typing.Mapping[tuple[float, float], LatLon]
+    control_points: collections.abc.Mapping[tuple[float, float], LatLon]
 
 
 class DataError(Exception):

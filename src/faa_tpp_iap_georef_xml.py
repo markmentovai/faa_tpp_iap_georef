@@ -20,6 +20,7 @@
 # It is limited to XML output.
 
 import argparse
+import collections.abc
 import typing
 import os
 import sys
@@ -48,7 +49,7 @@ def _xml_el(
     tag: str,
     attrib: dict[str, str] = {},
     text: str | None = None,
-    children: typing.Iterable[xml.etree.ElementTree.Element] = ()
+    children: collections.abc.Iterable[xml.etree.ElementTree.Element] = ()
 ) -> xml.etree.ElementTree.Element:
     el = xml.etree.ElementTree.Element(tag, attrib=attrib)
     el.text = text
@@ -192,7 +193,7 @@ def faa_tpp_iap_georef_xml(in_path: os.PathLike[str] | str,
     xml_out_file.write('\n')
 
 
-def main(args: typing.Sequence[str]) -> int | None:
+def main(args: collections.abc.Sequence[str]) -> int | None:
     parser = argparse.ArgumentParser()
     parser.add_argument('in_path')
     parser.add_argument('xml_out_path', nargs='?')
