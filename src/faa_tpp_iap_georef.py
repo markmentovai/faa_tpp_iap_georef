@@ -176,7 +176,7 @@ class _FaaTppIapGeorefOutputInterface(abc.ABC):
                  projection_precision: int | None = None):
         ...
 
-    def __enter__(self) -> _FaaTppIapGeorefOutputInterface:
+    def __enter__(self) -> typing.Self:
         return self
 
     @abc.abstractmethod
@@ -211,7 +211,7 @@ class _FaaTppIapGeorefCsvOutput(_FaaTppIapGeorefOutputInterface):
         self._projection_precision = projection_precision
 
     @typing.override
-    def __enter__(self) -> _FaaTppIapGeorefCsvOutput:
+    def __enter__(self) -> typing.Self:
         # Write the CSV header.
         self._csv_writer.writerow((
             'filename',

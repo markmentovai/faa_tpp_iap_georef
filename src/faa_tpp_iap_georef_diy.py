@@ -86,17 +86,17 @@ class _Rect:
         self._h = h
 
     @classmethod
-    def from_xywh(cls, x: float, y: float, w: float, h: float) -> _Rect:
+    def from_xywh(cls, x: float, y: float, w: float, h: float) -> typing.Self:
         return cls(x, y, w, h)
 
     @classmethod
-    def from_lbrt(cls, l: float, b: float, r: float, t: float) -> _Rect:
+    def from_lbrt(cls, l: float, b: float, r: float, t: float) -> typing.Self:
         return cls(l, b, r - l, t - b)
 
     @classmethod
     def from_pdf_box_array(
-            cls,
-            pdf_box_array: pikepdf.Array | pypdf.generic.ArrayObject) -> _Rect:
+        cls, pdf_box_array: pikepdf.Array | pypdf.generic.ArrayObject
+    ) -> typing.Self:
         l, b, r, t = pdf_box_array
         assert isinstance(l, (decimal.Decimal, float, int))
         assert isinstance(b, (decimal.Decimal, float, int))
@@ -106,16 +106,16 @@ class _Rect:
 
     @classmethod
     def from_pdf_box_array_obj(
-            cls, pdf_box_array_obj: pikepdf.Object | pypdf.generic.PdfObject
-    ) -> _Rect:
+        cls, pdf_box_array_obj: pikepdf.Object | pypdf.generic.PdfObject
+    ) -> typing.Self:
         assert isinstance(pdf_box_array_obj,
                           (pikepdf.Array, pypdf.generic.ArrayObject))
         return cls.from_pdf_box_array(pdf_box_array_obj)
 
     @classmethod
     def from_pdf_polygon_array(
-            cls,
-            pdf_cor_array: pikepdf.Array | pypdf.generic.ArrayObject) -> _Rect:
+        cls, pdf_cor_array: pikepdf.Array | pypdf.generic.ArrayObject
+    ) -> typing.Self:
         if len(pdf_cor_array) == 10:
             blx, bly, brx, bry, trx, tr_y, tlx, tly, blx2, bly2 = pdf_cor_array
             faa_tpp_iap_georef_types.DataError.raise_if_ne(blx2, blx)
@@ -138,8 +138,8 @@ class _Rect:
 
     @classmethod
     def from_pdf_polygon_array_obj(
-            cls, pdf_cor_array_obj: pikepdf.Object | pypdf.generic.PdfObject
-    ) -> _Rect:
+        cls, pdf_cor_array_obj: pikepdf.Object | pypdf.generic.PdfObject
+    ) -> typing.Self:
         assert isinstance(pdf_cor_array_obj,
                           (pikepdf.Array, pypdf.generic.ArrayObject))
         return cls.from_pdf_polygon_array(pdf_cor_array_obj)
